@@ -16,3 +16,6 @@
 [submodule "libs/logging"]
 	path = libs/logging
 	url = https://github.com/ikarolaborda/ticketarget-logging.git
+[submodule "services/users-service"]
+	path = services/users-service
+	url = https://github.com/ikarolaborda/ticketarget-users-service.git

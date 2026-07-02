@@ -109,6 +109,7 @@ lint: ## Run static analysis + style checks across PHP services
 test: ## Run test suites
 	$(COMPOSE) run --rm event-service composer test
 	$(COMPOSE) run --rm booking-service composer test
+	$(COMPOSE) run --rm users-service composer test
 	$(COMPOSE) run --rm search-service composer test
 	$(COMPOSE) run --rm worker composer test
 

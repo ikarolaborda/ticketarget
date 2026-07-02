@@ -35,6 +35,12 @@ http:
       service: booking
       middlewares: [cors, booking-ratelimit, secure-headers, request-id]
 
+    auth:
+      rule: "Host(`api.ticketarget.localhost`) && PathPrefix(`/auth`)"
+      entryPoints: [web]
+      service: users
+      middlewares: [cors, api-ratelimit, secure-headers, request-id]
+
     kibana:
       rule: "Host(`logs.ticketarget.localhost`)"
       entryPoints: [web]
@@ -57,6 +63,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://search-service:8000"
+    users:
+      loadBalancer:
+        servers:
+          - url: "http://users-service:8000"
     kibana:
       loadBalancer:
         servers:

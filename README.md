@@ -65,6 +65,7 @@ topology and documentation, and mounts each deliverable as a **git submodule**
 | `services/booking-service` | [ticketarget-booking-service](https://github.com/ikarolaborda/ticketarget-booking-service) | Laravel 13 — waiting room, seat holds, Stripe |
 | `services/search-service` | [ticketarget-search-service](https://github.com/ikarolaborda/ticketarget-search-service) | Symfony 8.1 — fuzzy + autocomplete search |
 | `services/worker` | [ticketarget-worker](https://github.com/ikarolaborda/ticketarget-worker) | Symfony 8.1 — CDC → Elasticsearch projector |
+| `services/users-service` | [ticketarget-users-service](https://github.com/ikarolaborda/ticketarget-users-service) | Laravel 13 — accounts, login, stateless HS256 auth tokens |
 | `frontend` | [ticketarget-frontend](https://github.com/ikarolaborda/ticketarget-frontend) | Vue 3 + Pinia + Vite SPA |
 | `libs/logging` | [ticketarget-logging](https://github.com/ikarolaborda/ticketarget-logging) | Shared PSR-3 Monolog→Kafka package |
 

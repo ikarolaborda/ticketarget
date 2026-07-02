@@ -314,6 +314,12 @@ services:
       REDIS_LOCK_DB: ${REDIS_LOCK_DB:-1}
       STRIPE_SECRET: ${STRIPE_SECRET}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-tickets@ticketarget.localhost}
+      MAIL_FROM_NAME: Ticketarget
     labels:
       - traefik.enable=true
       - traefik.docker.network=ticketarget_edge
@@ -355,6 +361,37 @@ services:
     # CLI process — the image's HTTP healthcheck does not apply.
     healthcheck:
       disable: true
+    networks: [backplane]
+
+  users-service:
+    build:
+      <<: *php-build
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.5}
+        SERVICE: services/users-service
+        APP_FRAMEWORK: laravel
+    restart: *restart
+    depends_on:
+      postgres-primary: { condition: service_healthy }
+    environment:
+      <<: *php-env
+      APP_KEY: ${USERS_APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: ${POSTGRES_PRIMARY_HOST}
+      DB_READ_HOST: ${POSTGRES_REPLICA_HOST}
+      DB_PORT: ${POSTGRES_PORT}
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+    networks: [edge, backplane]
+
+  # Local SMTP sink: guest ticket emails land here (UI on :58025).
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: *restart
+    ports:
+      - "${MAILPIT_UI_PORT:-58025}:8025"
     networks: [backplane]
 
   search-service:
