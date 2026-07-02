@@ -1,0 +1,12 @@
+{
+	frankenphp
+	auto_https off
+}
+
+# Every PHP HTTP service listens on :8000; SERVER_ROOT selects the service's
+# public/ directory. Traefik load-balances to this port.
+:8000 {
+	root * {$SERVER_ROOT:public/}
+	encode zstd gzip
+	php_server
+}

@@ -1,0 +1,24 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1
+  },
+  "mappings": {
+    "properties": {
+      "message":    { "type": "text" },
+      "level":      { "type": "integer" },
+      "level_name": { "type": "keyword" },
+      "channel":    { "type": "keyword" },
+      "datetime":   { "type": "date" },
+      "context":    { "type": "object", "enabled": true },
+      "extra": {
+        "properties": {
+          "service":  { "type": "keyword" },
+          "env":      { "type": "keyword" },
+          "host":     { "type": "keyword" },
+          "trace_id": { "type": "keyword" }
+        }
+      }
+    }
+  }
+}

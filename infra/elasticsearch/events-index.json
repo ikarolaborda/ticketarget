@@ -1,0 +1,46 @@
+{
+  "settings": {
+    "number_of_shards": 3,
+    "number_of_replicas": 1,
+    "analysis": {
+      "filter": {
+        "pt_stemmer": { "type": "stemmer", "language": "brazilian" },
+        "en_stemmer": { "type": "stemmer", "language": "english" },
+        "edge_ngram_filter": { "type": "edge_ngram", "min_gram": 2, "max_gram": 20 }
+      },
+      "analyzer": {
+        "event_text": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "asciifolding", "pt_stemmer", "en_stemmer"]
+        },
+        "event_autocomplete": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "asciifolding", "edge_ngram_filter"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "id":          { "type": "keyword" },
+      "name":        {
+        "type": "text",
+        "analyzer": "event_text",
+        "fields": {
+          "autocomplete": { "type": "text", "analyzer": "event_autocomplete", "search_analyzer": "event_text" },
+          "raw": { "type": "keyword" }
+        }
+      },
+      "description": { "type": "text", "analyzer": "event_text" },
+      "type":        { "type": "keyword" },
+      "artist":      { "type": "text", "analyzer": "event_text" },
+      "venue_name":  { "type": "text", "analyzer": "event_text" },
+      "venue_city":  { "type": "keyword" },
+      "status":      { "type": "keyword" },
+      "date":        { "type": "date" },
+      "min_price":   { "type": "scaled_float", "scaling_factor": 100 }
+    }
+  }
+}

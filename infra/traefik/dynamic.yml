@@ -1,0 +1,114 @@
+# Traefik dynamic configuration (file provider). Routers and services are
+# declared statically here instead of via Docker labels, so Traefik never needs
+# the Docker socket — it reaches each service by its container DNS name on the
+# shared `edge` network. Host rules assume ROOT_DOMAIN=ticketarget.localhost.
+http:
+  routers:
+    frontend:
+      rule: "Host(`app.ticketarget.localhost`)"
+      entryPoints: [web]
+      service: frontend
+      middlewares: [secure-headers]
+
+    event:
+      rule: "Host(`api.ticketarget.localhost`) && (PathPrefix(`/events`) || PathPrefix(`/event`) || PathPrefix(`/venues`))"
+      entryPoints: [web]
+      service: event
+      middlewares: [cors, api-ratelimit, secure-headers, request-id]
+
+    search:
+      rule: "Host(`api.ticketarget.localhost`) && PathPrefix(`/search`)"
+      entryPoints: [web]
+      service: search
+      middlewares: [cors, api-ratelimit, secure-headers, request-id]
+
+    # Purchase path is gated by the waiting-room forward-auth.
+    booking-reserve:
+      rule: "Host(`api.ticketarget.localhost`) && Path(`/reserve`)"
+      entryPoints: [web]
+      service: booking
+      middlewares: [cors, booking-ratelimit, secure-headers, request-id, edge-challenge]
+
+    booking:
+      rule: "Host(`api.ticketarget.localhost`) && (PathPrefix(`/booking`) || PathPrefix(`/queue`))"
+      entryPoints: [web]
+      service: booking
+      middlewares: [cors, booking-ratelimit, secure-headers, request-id]
+
+    kibana:
+      rule: "Host(`logs.ticketarget.localhost`)"
+      entryPoints: [web]
+      service: kibana
+
+  services:
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:80"
+    event:
+      loadBalancer:
+        servers:
+          - url: "http://event-service:8000"
+    booking:
+      loadBalancer:
+        servers:
+          - url: "http://booking-service:8000"
+    search:
+      loadBalancer:
+        servers:
+          - url: "http://search-service:8000"
+    kibana:
+      loadBalancer:
+        servers:
+          - url: "http://kibana:5601"
+
+  middlewares:
+    # Allow the SPA (app.*) to call the API (api.*) cross-origin. Traefik also
+    # answers CORS preflight (OPTIONS) requests when this is configured.
+    cors:
+      headers:
+        accessControlAllowOriginList:
+          - "http://app.ticketarget.localhost"
+        accessControlAllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
+        accessControlAllowHeaders: ["Content-Type", "Authorization", "X-Queue-Token", "X-Request-Id"]
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # General API rate limit, keyed by client IP only (never geolocation).
+    api-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 200
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    # Stricter limit on the purchase path to blunt bot storms during on-sales.
+    booking-ratelimit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1s
+        sourceCriterion:
+          ipStrategy:
+            depth: 1
+
+    secure-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+
+    request-id:
+      headers:
+        customResponseHeaders:
+          X-Served-By: traefik
+
+    # Cloudflare-style edge challenge / waiting-room auth on the purchase path.
+    edge-challenge:
+      forwardAuth:
+        address: "http://booking-service:8000/internal/queue/verify"
+        authResponseHeaders:
+          - X-Queue-Token

@@ -1,0 +1,5 @@
+.env
+.agent/
+.idea/
+.serena/
+.DS_Store

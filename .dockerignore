@@ -1,0 +1,15 @@
+**/vendor
+**/node_modules
+**/var/cache
+**/var/log
+**/storage/framework/cache
+**/storage/framework/sessions
+**/storage/framework/views
+**/storage/logs
+**/dist
+.git
+.idea
+.vscode
+data
+*.md
+docs

@@ -1,0 +1,78 @@
+# Local development overrides — applied automatically by `docker compose`.
+# Mounts source for hot reload, builds the `dev` image target, exposes infra ports.
+# Anonymous volumes on vendor/ keep the image-installed dependencies from being
+# hidden by the source bind-mount.
+
+services:
+  event-service:
+    build:
+      target: dev
+    volumes:
+      - ./services/event-service:/srv/services/event-service
+      - /srv/services/event-service/vendor
+      - ./libs:/srv/libs
+
+  booking-service:
+    build:
+      target: dev
+    volumes:
+      - ./services/booking-service:/srv/services/booking-service
+      - /srv/services/booking-service/vendor
+      - ./libs:/srv/libs
+
+  booking-scheduler:
+    build:
+      target: dev
+    volumes:
+      - ./services/booking-service:/srv/services/booking-service
+      - /srv/services/booking-service/vendor
+      - ./libs:/srv/libs
+
+  search-service:
+    build:
+      target: dev
+    volumes:
+      - ./services/search-service:/srv/services/search-service
+      - /srv/services/search-service/vendor
+      - ./libs:/srv/libs
+
+  worker:
+    build:
+      target: dev
+    volumes:
+      - ./services/worker:/srv/services/worker
+      - /srv/services/worker/vendor
+      - ./libs:/srv/libs
+
+  log-shipper:
+    build:
+      target: dev
+    volumes:
+      - ./services/worker:/srv/services/worker
+      - /srv/services/worker/vendor
+      - ./libs:/srv/libs
+
+  postgres-primary:
+    ports:
+      - "${POSTGRES_PRIMARY_PORT:-55432}:5432"
+
+  postgres-replica:
+    ports:
+      - "${POSTGRES_REPLICA_PORT:-55433}:5432"
+
+  redis-master:
+    ports:
+      - "${REDIS_HOST_PORT:-56379}:6379"
+
+  elasticsearch:
+    ports:
+      - "${ELASTICSEARCH_HOST_PORT:-59200}:9200"
+
+  kafka:
+    ports:
+      - "${KAFKA_HOST_PORT:-59092}:9092"
+
+  # The frontend runs as the built prod image (nginx on :80, matching its Traefik
+  # label). For live Vue hot-reload during development, run Vite on the host:
+  #   cd frontend && npm install && npm run dev
+  # and point it at the gateway via VITE_API_BASE_URL.

@@ -1,0 +1,18 @@
+[submodule "services/event-service"]
+	path = services/event-service
+	url = https://github.com/ikarolaborda/ticketarget-event-service.git
+[submodule "services/booking-service"]
+	path = services/booking-service
+	url = https://github.com/ikarolaborda/ticketarget-booking-service.git
+[submodule "services/search-service"]
+	path = services/search-service
+	url = https://github.com/ikarolaborda/ticketarget-search-service.git
+[submodule "services/worker"]
+	path = services/worker
+	url = https://github.com/ikarolaborda/ticketarget-worker.git
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/ikarolaborda/ticketarget-frontend.git
+[submodule "libs/logging"]
+	path = libs/logging
+	url = https://github.com/ikarolaborda/ticketarget-logging.git

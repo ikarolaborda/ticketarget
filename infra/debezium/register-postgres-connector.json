@@ -1,0 +1,25 @@
+{
+  "name": "ticketarget-postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "postgres-primary",
+    "database.port": "5432",
+    "database.user": "replicator",
+    "database.password": "change-me-replication",
+    "database.dbname": "ticketarget",
+    "topic.prefix": "ticketarget.cdc",
+    "plugin.name": "pgoutput",
+    "slot.name": "ticketarget_debezium",
+    "publication.autocreate.mode": "filtered",
+    "table.include.list": "public.events,public.venues,public.tickets",
+    "tombstones.on.delete": "true",
+    "decimal.handling.mode": "string",
+    "snapshot.mode": "always",
+    "heartbeat.interval.ms": "10000",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}
