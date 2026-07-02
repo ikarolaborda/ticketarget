@@ -1,8 +1,9 @@
 # Ticketarget Refund Policy
 
-_Customer-facing policy. The self-service refund flow described below is
-**proposed and not yet implemented** — refunds are currently handled manually in
-Stripe. Technical commitments become binding only when the refund engine ships._
+_Customer-facing policy. The self-service refund flow below is **implemented**:
+account holders refund from My Tickets; guests can use their signed entry code
+against `POST /booking/{id}/refund`. The `charge.refunded` webhook is the source
+of truth that completes the refund and releases the seat._
 
 ## Policy
 
