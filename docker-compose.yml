@@ -279,6 +279,7 @@ services:
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
     labels:
       - traefik.enable=true
       - traefik.docker.network=ticketarget_edge

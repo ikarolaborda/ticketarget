@@ -65,6 +65,10 @@ seed: ## Run migrations and seeders
 admin-token: ## Mint an events:write admin API token
 	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary event-service php artisan admin:token
 
+.PHONY: admin-promote
+admin-promote: ## Grant the admin flag to an account: make admin-promote EMAIL=user@example.com
+	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary users-service php artisan admin:promote $(EMAIL)
+
 .PHONY: fix-replication
 fix-replication: ## Ensure the replicator role + pg_hba rules exist on the running primary
 	$(COMPOSE) exec -T postgres-primary bash /docker-entrypoint-initdb.d/10-replication.sh

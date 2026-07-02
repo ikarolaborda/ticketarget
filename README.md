@@ -122,5 +122,14 @@ Then open:
 - Logs dashboard (Kibana): <http://logs.ticketarget.localhost>
 - Traefik dashboard: <http://localhost:18080> (override with `TRAEFIK_DASHBOARD_PORT`)
 
+## Admin access
+
+Catalog administration (`/admin` in the SPA) is gated server-side by dual bearer
+acceptance in the Event Service: a platform JWT carrying `is_admin: true` (humans),
+or a Sanctum `events:write` token (CLI/service callers, `make admin-token`).
+Grant the flag to an account with `make admin-promote EMAIL=user@example.com`
+(a fresh login is needed to pick up the new claim). The client-side `/admin`
+gate is UX only — the server check is the source of truth.
+
 See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the deep dive and
 [`docs/PHASES.md`](./docs/PHASES.md) for the delivery roadmap.
