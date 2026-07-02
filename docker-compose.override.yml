@@ -28,6 +28,14 @@ services:
       - /srv/services/booking-service/vendor
       - ./libs:/srv/libs
 
+  users-service:
+    build:
+      target: dev
+    volumes:
+      - ./services/users-service:/srv/services/users-service
+      - /srv/services/users-service/vendor
+      - ./libs:/srv/libs
+
   search-service:
     build:
       target: dev
