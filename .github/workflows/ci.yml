@@ -15,15 +15,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [event-service, booking-service]
+        service: [event-service, booking-service, users-service]
     steps:
+      # services/* are submodules — without recursive checkout the job sees
+      # empty directories and composer dies at install.
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup PHP 8.5
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
-          extensions: pdo_pgsql, redis, rdkafka, intl, zip, bcmath, pcntl
+          extensions: pdo_pgsql, pdo_sqlite, sqlite3, redis, rdkafka, intl, zip, bcmath, pcntl
           coverage: none
           tools: composer:v2
 
@@ -52,6 +56,8 @@ jobs:
         service: [search-service, worker]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup PHP 8.5
         uses: shivammathur/setup-php@v2
@@ -69,11 +75,17 @@ jobs:
         working-directory: services/${{ matrix.service }}
         run: vendor/bin/phpstan analyse --no-progress
 
+      - name: PHPUnit
+        working-directory: services/${{ matrix.service }}
+        run: vendor/bin/phpunit
+
   frontend:
     name: Frontend (Vue)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-node@v4
         with:
@@ -81,11 +93,15 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Type-check
         working-directory: frontend
         run: npm run type-check
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm run test:unit
 
       - name: Build
         working-directory: frontend
@@ -98,6 +114,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Prepare env
         run: cp .env.example .env
