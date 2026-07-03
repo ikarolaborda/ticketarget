@@ -442,6 +442,8 @@ services:
       CDC_TOPIC_PREFIX: ${CDC_TOPIC_PREFIX:-ticketarget.cdc}
       CDC_DLQ_TOPIC: ${CDC_DLQ_TOPIC:-ticketarget.cdc.dlq}
       CDC_MAX_ATTEMPTS: ${CDC_MAX_ATTEMPTS:-3}
+      CDC_TRANSIENT_MAX_ATTEMPTS: ${CDC_TRANSIENT_MAX_ATTEMPTS:-5}
+      CDC_TRANSIENT_BACKOFF_MS: ${CDC_TRANSIENT_BACKOFF_MS:-1000}
       # Enrichment reads hit the PRIMARY: a CDC event fires when the row lands on
       # the primary, so reading from a lagging replica could miss it and cause a
       # spurious delete from the index.
