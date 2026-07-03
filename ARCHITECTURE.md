@@ -95,3 +95,25 @@ Every PHP service uses the shared `ticketarget/logging` package: PSR-3 Monolog w
 formatter, automatic correlation/trace IDs, and a Kafka handler that ships logs to a
 `logs.*` topic (with a stdout fallback). This gives one standardized, queryable log stream
 across the whole platform.
+
+## ADR: admin UI lives inside the single SPA (2026-07-03)
+
+The admin panel (including the sales dashboard) is a role-gated section of the one
+Vue SPA, not a separate "backoffice" frontend. Rationale: the microservice
+boundaries here decompose the backend; a single SPA is the documented frontend and
+micro-frontends solve organizational problems (autonomous squads, independent
+deploys) this project does not have. Admin code is bundle-isolated already —
+`AdminView` is a lazy route chunk that customer visitors never download — and all
+authorization is server-side (JWT `is_admin`), so a separate origin would not
+strengthen authZ. The admin chunk remains publicly *fetchable*: that is metadata
+exposure (UI shape, endpoint paths), accepted deliberately.
+
+Boundary rules that keep a future split cheap:
+- all admin frontend code lives in `src/views/AdminView.vue`, `src/components/admin/`
+  and admin-only composables; customer views must never import from them
+- admin API endpoints (`/booking/admin/*`, event-service admin routes) stay
+  UI-neutral REST so any future backoffice consumes them unchanged
+
+Split triggers (revisit this ADR if any becomes true): a dedicated admin team;
+VPN/IP-allowlist or compliance requirements on operator access; a separate identity
+boundary; divergent release cadence; the admin app rivaling the customer app in size.
