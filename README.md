@@ -122,6 +122,13 @@ Then open:
 - Logs dashboard (Kibana): <http://logs.ticketarget.localhost>
 - Traefik dashboard: <http://localhost:18080> (override with `TRAEFIK_DASHBOARD_PORT`)
 
+## Whitelabel branding
+
+The frontend is fully brandable at runtime: mount your own `branding.json`
+over the baked-in one to change the name, logo mark, color scheme, corner
+style (square/rounded) and glass effect — no rebuild. See
+[docs/WHITELABEL.md](docs/WHITELABEL.md).
+
 ## Admin access
 
 Catalog administration (`/admin` in the SPA) is gated server-side by dual bearer
