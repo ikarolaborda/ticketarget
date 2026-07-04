@@ -70,13 +70,19 @@ backgrounds even in glass mode — readability wins over style there.
 
 ## Deployment notes
 
-- The frontend assumes a **root-path deployment** (`/branding.json` is fetched
-  root-absolute). Subpath deployments need a matching Vite `base` and a mount
-  at that base — not currently wired.
+- **Subpath deployments are supported at build time**: build the frontend
+  image with `--build-arg VITE_BASE=/tickets/` (trailing slash required) and
+  serve the SPA under that prefix. Asset URLs, the router base and the
+  branding fetch all follow it. Brand swaps stay runtime-only within a
+  chosen base; changing the base itself is a one-arg rebuild. Your reverse
+  proxy must preserve the prefix and serve `branding.json` + assets under
+  it, with the SPA index fallback applied to app routes only.
 - The client fetches with `cache: no-store`, but an upstream CDN must not
   cache `branding.json` aggressively or live brand swaps will lag.
 - Browsers without `color-mix()`/`backdrop-filter` get the stock derived
   tints and solid surfaces, with your primary brand colors still applied —
   a degraded but consistent appearance.
-- The page `<title>` shows the stock name for up to one fetch round-trip on
-  cold loads; visual tokens apply before first component paint.
+- The page `<title>` is restored from a local cache before first paint on
+  every visit after the first, so returning visitors never see the stock
+  name. Only the **first-ever** visit shows it for one request round-trip —
+  the structural floor without server-side rendering.

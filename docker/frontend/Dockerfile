@@ -20,7 +20,10 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 # ── Stage: build — produce static assets ──────────────────────────────────────
 FROM deps AS build
 ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+# Subpath deployments: --build-arg VITE_BASE=/tickets/ (see docs/WHITELABEL.md)
+ARG VITE_BASE=/
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
+    VITE_BASE=${VITE_BASE}
 WORKDIR /app
 COPY frontend/ ./
 RUN npm run build
