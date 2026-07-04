@@ -117,3 +117,17 @@ Boundary rules that keep a future split cheap:
 Split triggers (revisit this ADR if any becomes true): a dedicated admin team;
 VPN/IP-allowlist or compliance requirements on operator access; a separate identity
 boundary; divergent release cadence; the admin app rivaling the customer app in size.
+
+## Venue zones (dynamic venue configurations, 2026-07-04)
+
+Venues may define zones (`venue_zones`): seated (rows × seats per row) or standing
+(capacity), each with a validated normalized-rect geometry the admin positions by
+dragging on the venue preview. Buyers see the same map with per-zone availability
+and from-prices (`GET /events/{event}/zones`); standing zones sell by quantity over
+materialized tickets, so the reserve/booking/QR pipeline is unchanged. Lifecycle
+invariants: zone names unique per venue; seat labels are `<PREFIX>-<seat>` where
+multi-word names shrink to initials (collisions 409 at generation); each zone is
+generate-once per event (409 after; concurrent generates arbitrated by the
+`(event_id, seat)` unique index → 409); zones with tickets cannot be deleted and
+their topology (kind/rows/seats/capacity) is frozen — name, color, geometry and
+ordering stay editable. Venues without zones keep the flat seat map.
