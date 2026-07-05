@@ -113,3 +113,18 @@ php-rdkafka 6.0.5 on PHP 8.5 ZTS segfaults intermittently on explicit
 `KafkaConsumer::close()` after the work is done — the consumer relies on
 destructor teardown; offsets are already committed, nothing is lost either
 way.
+
+**Inventory ownership cutover (2026-07-05).** `seat_inventory` is authoritative
+for reserve/confirm/sweep/refund-release; catalog `tickets.status` is a
+mirrored shadow behind `CATALOG_STATUS_DUAL_WRITE` (default on). Buyer
+availability comes from `GET /booking/availability/{event}` (per-ticket status
++ zone aggregates); the SPA merges it over catalog static seat data and
+degrades to the catalog snapshot if the call fails. Seeding/recovery:
+`booking:seed-inventory` (fill-missing-only, rerunnable; new tickets flow in
+via `ticket.generated` `tickets[]`). Drift gate: `booking:verify-inventory
+--strict` compares the mirror against the inventory — drift means the mirror
+is broken, fix before trusting rollback. ROLLBACK CRITERIA: while the flag is
+on, rolling back means pointing reads at `tickets.status` again (mirror is
+current); after the flag is off this is IRREVERSIBLE without backfilling
+`tickets` from `seat_inventory` first. Disable the flag only after a sustained
+zero-drift window and update this note when it happens.

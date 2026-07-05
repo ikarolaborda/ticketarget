@@ -11,11 +11,22 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   `bookings.charge_id` is kept as a denormalized projection (API/display);
   money truth lives on the Payment. The webhook remains the source of truth:
   reconcile assigns the authoritative refunded total (monotonic, clamped).
-- **Phase 2 — SHADOW MODE ON.** Booking-owned `seat_inventory` mirrored on
-  reserve/confirm/sweep/refund-release inside the same transactions
-  (upsert-based; `INVENTORY_DUAL_WRITE` flag). `tickets.status` stays
-  authoritative; `booking:verify-inventory --strict` is the drift gate for
-  cutover. Cutover (flip reads, stop writing `tickets.status`) NOT done yet.
+- **Phase 2 — CUTOVER DONE (2026-07-05).** `seat_inventory` is the inventory
+  authority: reserve/confirm/sweep/refund-release read and write it
+  exclusively (lockForUpdate on inventory rows), and it carries the static
+  seat identity (`seat`, `price`, `type`, `zone_id`) so those paths never
+  touch catalog tables. Seeded once by `booking:seed-inventory`
+  (fill-missing-only, rerunnable); new tickets arrive via `ticket.generated`
+  `tickets[]` through `catalog:consume`. Buyer availability is served by
+  booking (`GET /booking/availability/{event}`: per-ticket status + zone
+  aggregates) and merged over the catalog's static seat data in the SPA.
+  Rollback bridge: `CATALOG_STATUS_DUAL_WRITE` (default on) mirrors every
+  transition to `tickets.status`; `booking:verify-inventory --strict` now
+  checks the MIRROR against the inventory. While the flag is on, rollback =
+  point reads back at catalog; once it is off, rollback additionally needs a
+  `seat_inventory` → `tickets` backfill. Turn it off only after a sustained
+  zero-drift window. Catalog's own `tickets.status` writes ceased with this
+  cutover (single writer via booking's mirror).
 - **Phase 3 — SEEDED (both contexts).** Transactional `outbox_messages`
   (unique `event_key` dedupe) written for `payment.captured`,
   `booking.confirmed`, `payment.refunded`; `outbox:publish` ships to Kafka
