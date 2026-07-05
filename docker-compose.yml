@@ -472,13 +472,16 @@ services:
       CDC_MAX_ATTEMPTS: ${CDC_MAX_ATTEMPTS:-3}
       CDC_TRANSIENT_MAX_ATTEMPTS: ${CDC_TRANSIENT_MAX_ATTEMPTS:-5}
       CDC_TRANSIENT_BACKOFF_MS: ${CDC_TRANSIENT_BACKOFF_MS:-1000}
-      # Enrichment reads hit the PRIMARY: a CDC event fires when the row lands on
-      # the primary, so reading from a lagging replica could miss it and cause a
-      # spurious delete from the index.
+      CATALOG_EVENTS_TOPIC: ${CATALOG_EVENTS_TOPIC:-catalog.events}
+      CATALOG_DLQ_TOPIC: ${CATALOG_DLQ_TOPIC:-catalog.events.dlq}
+      # Legacy CDC-path config (DB enrichment reads + Debezium topics). Kept
+      # during the rollback window; remove with the Debezium decommission.
       DB_READ_DSN: "pgsql:host=${POSTGRES_PRIMARY_HOST};port=${POSTGRES_PORT};dbname=${POSTGRES_DB}"
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-    command: ["php", "/srv/services/worker/bin/console", "ticketarget:cdc:consume"]
+    # Rollback = switch back to ticketarget:cdc:consume (old group offsets and
+    # Debezium stay intact during the validation window).
+    command: ["php", "/srv/services/worker/bin/console", "ticketarget:search:index"]
     # CLI process — the image's HTTP healthcheck does not apply.
     healthcheck:
       disable: true

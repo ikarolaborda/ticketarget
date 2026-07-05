@@ -35,9 +35,16 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   `{event_id, zone_id, count, tickets[]}`) to `catalog.events` from both
   generation paths — zone generation keys on the zone id (generate-once),
   manual additions key on the gateway `X-Request-Id` (retry dedupe); the
-  `event-scheduler` compose service runs its publisher. Legacy raw-table CDC
-  for search is unchanged; the worker migrates to explicit events after
-  Phase 2 cutover.
+  `event-scheduler` compose service runs its publisher. **Worker CDC migration
+  DONE (2026-07-05):** the search worker consumes `catalog.events` integration
+  events (`event.created`/`event.updated`/`event.deleted`, event-carried state
+  with `schema_version` 2: full document fields + embedded venue identity +
+  in-transaction `min_price`; both ticket-generation paths re-emit
+  `event.updated` so price changes propagate) and builds documents from
+  payloads alone — its cross-context DB read is gone. Out-of-order delivery is
+  handled with ES `external_gte` versioning on emission-time microsecond
+  `occurred_at`. Raw-table Debezium CDC is deprecated; connector + old command
+  are kept only as the rollback path until decommission (see OPERATIONS.md).
 - **Phase 4 — JOINS REMOVED (isolation pending).** Purchase-time snapshots on
   bookings (`seat`, `ticket_type`, `event_name`, `event_id`, `event_date`) and
   reservations (`seats` json at reserve), with a rerunnable fill-missing-only

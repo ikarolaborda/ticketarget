@@ -154,3 +154,44 @@ outbox, and backfill `occurred_at` = persisted `updated_at` is always older
 than any live emission, so re-runs can never clobber newer state), then
 `outbox:publish` + `catalog:consume` as usual. Retire the fallback (and this
 note's shared-DB caveat) at schema isolation.
+
+**Search indexer on integration events (2026-07-05).** The `worker` compose
+service now runs `ticketarget:search:index`: it consumes `catalog.events`
+(consumer group `ticketarget-search-indexer`, earliest) and builds each search
+document entirely from the event-carried state in `event.created`/
+`event.updated`/`event.deleted` payloads (`schema_version` 2) — no database
+read. Raw-table Debezium CDC is DEPRECATED for search; the old
+`ticketarget:cdc:consume` command, its consumer group, and the Debezium
+connector are kept intact only as the rollback path.
+
+- *Ordering.* The outbox publisher keys Kafka messages by `event_key`, so
+  per-event partition order is not guaranteed. Writes are versioned instead:
+  ES `version_type=external_gte` with `version` = payload `occurred_at` in
+  epoch microseconds. Stale writes/deletes 409 and are discarded as satisfied
+  intent (`Search index write discarded as stale`, info); equal-version
+  replays succeed idempotently. Clock regression on the event-service host is
+  the one way to break this — occurred_at is wall-clock emission time.
+- *Skips.* Pre-enrichment history (payloads without `schema_version >= 2`) and
+  non-document events (`ticket.generated`, …) are skipped and committed.
+  Malformed `schema_version >= 2` payloads go to the DLQ
+  (`catalog.events.dlq`). There is no replay command for that DLQ: the repair
+  tool is a full `catalog:backfill-event-directory` run, which re-emits every
+  event through the live pipeline and rebuilds the whole index.
+- *Rollout sequence (performed 2026-07-05).* Deploy event-service (enriched
+  payloads) → deploy worker on `ticketarget:search:index` → run
+  `catalog:backfill-event-directory` → verify document counts and sample
+  fields (`venue_name`, `min_price`) against the catalog → keep Debezium
+  running for the validation window.
+- *Rollback.* Switch the worker compose command back to
+  `ticketarget:cdc:consume`. The old group's offsets and the Debezium
+  connector are untouched, so the CDC path resumes where it left off and
+  overwrites any divergence from DB truth (unversioned writes still win over
+  versioned docs only via full reindex — after a rollback, touch affected rows
+  or re-register the connector with `snapshot.mode=always` to force a
+  resnapshot).
+- *Decommission (after the validation window, target with the
+  `CATALOG_STATUS_DUAL_WRITE` flag-off ~2026-07-12+).* Remove the Debezium
+  connector + `debezium-connect` service + `make register-cdc`, delete the
+  worker's CDC code path (`ticketarget:cdc:consume`, `PdoEventProjection`,
+  DB env/`postgres-replica` dependency), and drop `wal_level=logical` if
+  nothing else needs it. Update this note when it happens.
