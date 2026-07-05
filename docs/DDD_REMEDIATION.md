@@ -33,11 +33,21 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   backfill. MyBookings, the admin bookings feed, the admin top-events sales
   aggregation, and reservation rehydration are now booking-local reads
   (post-snapshot reservations collapse per-ticket status to the aggregate
-  reservation state by design). The ONE deliberate residual cross-context read
-  is the admin capacity count (catalog data; moves to an event-fed read model
-  before schema isolation). Snapshots are purchase-time truth: catalog edits
-  after purchase do not rewrite receipts. Schema-per-context isolation itself
-  is still open.
+  reservation state by design). The former residual cross-context read — the
+  admin capacity count — is GONE (2026-07-05): booking owns
+  `catalog_capacity_ledger`, a projection of `ticket.generated` events from
+  `catalog.events` (`catalog:consume` on the scheduler; one row per
+  `event_key`, capacity = SUM(count), replay-safe). Pre-outbox history was
+  seeded through the same pipe by `catalog:backfill-ticket-events` (zone
+  events reuse the live deterministic key; manual remainders are
+  cutoff-bounded); `booking:verify-capacity --strict` is the parity gate while
+  the shared DB still allows comparison. Snapshots are purchase-time truth:
+  catalog edits after purchase do not rewrite receipts. Schema-per-context
+  isolation itself is still open; remaining catalog touches in booking are the
+  confirm-time snapshot capture, legacy-row snapshot fallbacks
+  (`RefundBookingAction`, `ShowReservationController`), Phase-2 shadow
+  plumbing (`SeatInventoryProjector`, gone at cutover), and the deliberate
+  verify gates — all write-path or transitional, none in the reporting path.
 - **Phase 5 — SCHEMA OWNERSHIP MOVED.** `users`, `personal_access_tokens`,
   `is_admin` migrations now live in users-service (identical filenames: the
   shared `migrations` ledger prevents re-runs). event-service still *reads*

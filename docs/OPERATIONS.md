@@ -97,3 +97,19 @@ guarded (`pending → captured → partially_refunded/refunded | failed`);
 `refunded_amount` is webhook-authoritative, monotonic, and clamped.
 `bookings.charge_id`/`payment_id` are display projections — never treat them
 as money truth.
+
+**Capacity read model (2026-07-05).** Booking's admin dashboard reads event
+capacity from `catalog_capacity_ledger`, fed by `ticket.generated` events on
+Kafka topic `catalog.events` — no catalog tables are read. `catalog:consume`
+runs every minute on `booking-scheduler` (bounded drain; offsets committed
+after each row is applied; the unique `event_key` absorbs replays). Seeding a
+fresh environment or recovering from data loss: run
+`event-service artisan catalog:backfill-ticket-events --cutoff=<ISO8601 now>`
+(idempotent — zone events reuse the live key, manual remainders subtract prior
+announcements including earlier backfills), let `outbox:publish` ship it, then
+check `booking:verify-capacity --strict` (exit 1 on drift; retire this check
+at schema isolation, when catalog tables stop being readable). Known gotcha:
+php-rdkafka 6.0.5 on PHP 8.5 ZTS segfaults intermittently on explicit
+`KafkaConsumer::close()` after the work is done — the consumer relies on
+destructor teardown; offsets are already committed, nothing is lost either
+way.
