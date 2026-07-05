@@ -53,12 +53,19 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   events reuse the live deterministic key; manual remainders are
   cutoff-bounded); `booking:verify-capacity --strict` is the parity gate while
   the shared DB still allows comparison. Snapshots are purchase-time truth:
-  catalog edits after purchase do not rewrite receipts. Schema-per-context
+  catalog edits after purchase do not rewrite receipts. The confirm-time
+  snapshot capture is booking-local too (2026-07-05): `catalog_event_directory`
+  projects `event.created`/`event.updated` from `catalog.events`
+  (last-write-wins on emission-time microsecond `occurred_at`;
+  `catalog:backfill-event-directory` seeded history), and
+  `ConfirmBookingAction` reads it with a logged, write-through fallback to the
+  shared `events` table until the rollout converges. Schema-per-context
   isolation itself is still open; remaining catalog touches in booking are the
-  confirm-time snapshot capture, legacy-row snapshot fallbacks
-  (`RefundBookingAction`, `ShowReservationController`), Phase-2 shadow
-  plumbing (`SeatInventoryProjector`, gone at cutover), and the deliberate
-  verify gates — all write-path or transitional, none in the reporting path.
+  legacy-row snapshot fallbacks (`RefundBookingAction`,
+  `ShowReservationController`), the transitional confirm fallback above, the
+  Phase-2 status mirror (`CATALOG_STATUS_DUAL_WRITE`), and the deliberate
+  verify gates — all transitional, none in the reporting or steady-state
+  purchase path.
 - **Phase 5 — SCHEMA OWNERSHIP MOVED.** `users`, `personal_access_tokens`,
   `is_admin` migrations now live in users-service (identical filenames: the
   shared `migrations` ledger prevents re-runs). event-service still *reads*

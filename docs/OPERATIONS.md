@@ -128,3 +128,29 @@ on, rolling back means pointing reads at `tickets.status` again (mirror is
 current); after the flag is off this is IRREVERSIBLE without backfilling
 `tickets` from `seat_inventory` first. Disable the flag only after a sustained
 zero-drift window and update this note when it happens.
+
+**Rollback-window drift cadence (2026-07-05).** `booking:verify-inventory`
+runs every 15 minutes on `booking-scheduler` (non-strict: a mismatch alerts,
+it does not fail the scheduler run). Every run emits one structured log line —
+`Inventory drift check clean` (info) or `Inventory drift detected` (warning,
+with `mismatches` and `sample_ticket_ids`) — so the zero-drift window that
+gates the `CATALOG_STATUS_DUAL_WRITE` flag-off is queryable in Kibana
+(app-logs, `message:"Inventory drift*"`), not anecdotal.
+
+**Event directory read model (2026-07-05).** Confirm-time `event_name`/
+`event_date` snapshots read booking-owned `catalog_event_directory`, projected
+from `event.created`/`event.updated` on `catalog.events` (emitted by
+event-service's `UpsertEvent` inside the write transaction). Ordering:
+last-write-wins on `occurred_at` — emission-time microseconds, NOT the
+second-precision `updated_at`, so two edits in one second still order
+correctly; equal timestamps overwrite deterministically (same emission
+content). While the shared DB lasts, a directory miss at confirm falls back to
+the catalog `events` table, logs `Event directory miss` (warning) and writes
+through, healing itself; a persistent stream of those warnings means the
+consumer or backfill is broken. Seeding/recovery:
+`event-service artisan catalog:backfill-event-directory` (idempotent —
+deterministic `event.updated:backfill:{id}:{updated_at}` keys dedupe in the
+outbox, and backfill `occurred_at` = persisted `updated_at` is always older
+than any live emission, so re-runs can never clobber newer state), then
+`outbox:publish` + `catalog:consume` as usual. Retire the fallback (and this
+note's shared-DB caveat) at schema isolation.
