@@ -75,3 +75,25 @@ retried with backoff, halted without committing, crash-looped under compose, and
 event appeared in search 15 seconds after Elasticsearch restarted. DLQ end-offset was
 unchanged. The full historical DLQ (10,119 entries) was replayed with zero remaining
 poison after the delete-404 fix.
+
+## DDD remediation operations (2026-07-05)
+
+**Outbox publishing.** `outbox:publish` runs every minute on `booking-scheduler`
+and ships `outbox_messages` to Kafka topic `booking.events` (`OUTBOX_TOPIC`).
+Rows are marked published only after an acknowledged flush; failures increment
+`attempts` and record `last_error`, and rows stay retryable. Delivery is
+at-least-once — consumers must dedupe on `event_key`. If the `rdkafka`
+extension is missing the command logs a warning and skips (fine in dev; in
+production treat a growing unpublished backlog as an alert condition).
+
+**Inventory shadow mode.** `INVENTORY_DUAL_WRITE` (default on) mirrors every
+ticket-status transition into booking-owned `seat_inventory`;
+`tickets.status` remains the source of truth. Run
+`booking:verify-inventory --strict` (exit 1 on drift) to check the cutover
+gate; sustained zero drift is the precondition for flipping ownership.
+
+**Payment invariants.** One payment row per reservation; transitions are
+guarded (`pending → captured → partially_refunded/refunded | failed`);
+`refunded_amount` is webhook-authoritative, monotonic, and clamped.
+`bookings.charge_id`/`payment_id` are display projections — never treat them
+as money truth.
