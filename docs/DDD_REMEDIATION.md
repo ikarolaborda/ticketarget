@@ -73,11 +73,26 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   Phase-2 status mirror (`CATALOG_STATUS_DUAL_WRITE`), and the deliberate
   verify gates — all transitional, none in the reporting or steady-state
   purchase path.
-- **Phase 5 — SCHEMA OWNERSHIP MOVED.** `users`, `personal_access_tokens`,
-  `is_admin` migrations now live in users-service (identical filenames: the
-  shared `migrations` ledger prevents re-runs). event-service still *reads*
-  the users table (Sanctum CLI tokens) — documented deprecation, removed at
-  Phase 4 isolation. JWKS/RS256 issuance still open.
+- **Phase 5 — DONE (2026-07-05).** `users`, `personal_access_tokens`,
+  `is_admin` migrations live in users-service (identical filenames: the shared
+  `migrations` ledger prevents re-runs). **JWKS/RS256 (2026-07-05):**
+  users-service is the sole JWT issuer — it signs RS256 with a private key only
+  it holds (`AUTH_JWT_PRIVATE_KEY_PATH`, kid `AUTH_JWT_ACTIVE_KID`) and
+  publishes the public key at `GET /auth/.well-known/jwks.json`. booking- and
+  event-service became verify-only: they fetch the JWKS (cached, stale-on-error,
+  one refetch on kid miss), select the key by `kid`, and verify with
+  `openssl_verify`; the shared symmetric `AUTH_JWT_SECRET` is now a legacy path
+  accepted only while `AUTH_JWT_ACCEPT_HS256=true` (24h migration overlap — see
+  OPERATIONS.md for the cutoff + rotation runbook). This closes the forgery hole
+  where any of three services holding the shared secret could mint admin tokens.
+  event-service's Sanctum `admin:token` path is REMOVED (Sanctum dependency,
+  `User` model, `config/auth.php`, guard config all gone) — its last read of the
+  `users`/`personal_access_tokens` tables is eliminated, unblocking that service
+  from schema isolation (b). Admin JWTs for CLI/service callers now come from
+  `users-service artisan auth:issue-token` (admin-only). The RS256/JWK-to-PEM
+  construction is hand-rolled (zero new composer deps, DER-roundtrip tested
+  against openssl keys). `personal_access_tokens` table is left in place (dead,
+  no readers) — dropping it is a users-service follow-up.
 
 ## 1. The two questions, answered
 

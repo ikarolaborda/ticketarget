@@ -61,9 +61,18 @@ seed: ## Run migrations and seeders
 	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary event-service php artisan migrate --seed
 	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary booking-service php artisan migrate
 
+.PHONY: jwt-keys
+jwt-keys: ## Generate the RS256 signing keypair the Users service uses to issue JWTs
+	@mkdir -p infra/keys
+	@test -f infra/keys/jwt-private.pem \
+		&& echo "infra/keys/jwt-private.pem already exists — refusing to overwrite" \
+		|| (openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out infra/keys/jwt-private.pem \
+			&& chmod 600 infra/keys/jwt-private.pem \
+			&& echo "Wrote infra/keys/jwt-private.pem (kid: set AUTH_JWT_ACTIVE_KID, default k1)")
+
 .PHONY: admin-token
-admin-token: ## Mint an events:write admin API token
-	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary event-service php artisan admin:token
+admin-token: ## Mint an admin JWT for an existing admin: make admin-token EMAIL=user@example.com
+	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary users-service php artisan auth:issue-token $(EMAIL)
 
 .PHONY: replay-dlq
 replay-dlq: ## Replay dead-lettered CDC events through the projection pipeline

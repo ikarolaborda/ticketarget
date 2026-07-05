@@ -131,9 +131,11 @@ style (square/rounded) and glass effect — no rebuild. See
 
 ## Admin access
 
-Catalog administration (`/admin` in the SPA) is gated server-side by dual bearer
-acceptance in the Event Service: a platform JWT carrying `is_admin: true` (humans),
-or a Sanctum `events:write` token (CLI/service callers, `make admin-token`).
+Catalog administration (`/admin` in the SPA) is gated server-side in the Event
+Service by a platform JWT carrying `is_admin: true`. Humans get one by logging
+in; CLI/service callers mint one with `make admin-token EMAIL=<existing admin>`
+(`users-service artisan auth:issue-token`, admin-only). Tokens are RS256, signed
+by the sole issuer (users-service) and verified against its published JWKS.
 Grant the flag to an account with `make admin-promote EMAIL=user@example.com`
 (a fresh login is needed to pick up the new claim). The client-side `/admin`
 gate is UX only — the server check is the source of truth.
