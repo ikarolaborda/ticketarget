@@ -364,6 +364,34 @@ services:
       disable: true
     networks: [backplane]
 
+  # Runs the Laravel scheduler (outbox publisher) for the Event service.
+  event-scheduler:
+    build:
+      <<: *php-build
+      args:
+        PHP_VERSION: ${PHP_VERSION:-8.5}
+        SERVICE: services/event-service
+        APP_FRAMEWORK: laravel
+    restart: *restart
+    depends_on:
+      postgres-primary: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    environment:
+      <<: *php-env
+      APP_KEY: ${EVENT_APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: ${POSTGRES_PRIMARY_HOST}
+      DB_READ_HOST: ${POSTGRES_REPLICA_HOST}
+      DB_PORT: ${POSTGRES_PORT}
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["php", "/srv/services/event-service/artisan", "schedule:work"]
+    # CLI process — the image's HTTP healthcheck does not apply.
+    healthcheck:
+      disable: true
+    networks: [backplane]
+
   users-service:
     build:
       <<: *php-build

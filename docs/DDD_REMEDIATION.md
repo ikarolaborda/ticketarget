@@ -16,15 +16,28 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   (upsert-based; `INVENTORY_DUAL_WRITE` flag). `tickets.status` stays
   authoritative; `booking:verify-inventory --strict` is the drift gate for
   cutover. Cutover (flip reads, stop writing `tickets.status`) NOT done yet.
-- **Phase 3 — SEEDED.** Transactional `outbox_messages` (unique `event_key`
-  dedupe) written for `payment.captured`, `booking.confirmed`,
-  `payment.refunded`; `outbox:publish` ships to Kafka (`booking.events`) every
-  minute on the scheduler. Legacy raw-table CDC for search is unchanged; the
-  worker migrates to explicit events after Phase 2 cutover.
-- **Phase 4 — PARTIAL.** `bookings.event_date` snapshot at confirmation; the
-  refund policy check prefers it and joins only for legacy rows. Remaining
-  joins (admin stats, reservation display) and schema-per-context isolation
-  are still open.
+- **Phase 3 — SEEDED (both contexts).** Transactional `outbox_messages`
+  (unique `event_key` dedupe) written for `payment.captured`,
+  `booking.confirmed`, `payment.refunded`; `outbox:publish` ships to Kafka
+  (`booking.events`) every minute on the scheduler. event-service now has the
+  same outbox and emits `ticket.generated` (event-carried state:
+  `{event_id, zone_id, count, tickets[]}`) to `catalog.events` from both
+  generation paths — zone generation keys on the zone id (generate-once),
+  manual additions key on the gateway `X-Request-Id` (retry dedupe); the
+  `event-scheduler` compose service runs its publisher. Legacy raw-table CDC
+  for search is unchanged; the worker migrates to explicit events after
+  Phase 2 cutover.
+- **Phase 4 — JOINS REMOVED (isolation pending).** Purchase-time snapshots on
+  bookings (`seat`, `ticket_type`, `event_name`, `event_id`, `event_date`) and
+  reservations (`seats` json at reserve), with a rerunnable fill-missing-only
+  backfill. MyBookings, the admin bookings feed, the admin top-events sales
+  aggregation, and reservation rehydration are now booking-local reads
+  (post-snapshot reservations collapse per-ticket status to the aggregate
+  reservation state by design). The ONE deliberate residual cross-context read
+  is the admin capacity count (catalog data; moves to an event-fed read model
+  before schema isolation). Snapshots are purchase-time truth: catalog edits
+  after purchase do not rewrite receipts. Schema-per-context isolation itself
+  is still open.
 - **Phase 5 — SCHEMA OWNERSHIP MOVED.** `users`, `personal_access_tokens`,
   `is_admin` migrations now live in users-service (identical filenames: the
   shared `migrations` ledger prevents re-runs). event-service still *reads*
