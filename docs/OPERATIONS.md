@@ -174,9 +174,16 @@ connector are kept intact only as the rollback path.
 - *Skips.* Pre-enrichment history (payloads without `schema_version >= 2`) and
   non-document events (`ticket.generated`, …) are skipped and committed.
   Malformed `schema_version >= 2` payloads go to the DLQ
-  (`catalog.events.dlq`). There is no replay command for that DLQ: the repair
-  tool is a full `catalog:backfill-event-directory` run, which re-emits every
-  event through the live pipeline and rebuilds the whole index.
+  (`catalog.events.dlq`). There is no replay command for that DLQ.
+- *Index repair.* Once enriched payloads exist in the topic, a lost/corrupt
+  index is rebuilt by replaying `catalog.events` — reset the group and restart
+  the worker:
+  `kafka-consumer-groups --bootstrap-server localhost:9092 --group
+  ticketarget-search-indexer --topic catalog.events --reset-offsets
+  --to-earliest --execute`. `catalog:backfill-event-directory` is for events
+  MISSING from the topic (its keys embed the payload schema version, so a
+  shape upgrade re-emits every event once; same-shape re-runs dedupe in the
+  outbox and equal-`occurred_at` replays are no-ops for every consumer).
 - *Rollout sequence (performed 2026-07-05).* Deploy event-service (enriched
   payloads) → deploy worker on `ticketarget:search:index` → run
   `catalog:backfill-event-directory` → verify document counts and sample
