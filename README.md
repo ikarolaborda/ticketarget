@@ -108,11 +108,31 @@ ticketarget/
 
 ## Getting started
 
+On a fresh machine, one command brings up everything — dependencies, built
+frontend, keys, migrations, Elasticsearch indices, CDC connector, and a seeded
+admin:
+
+```bash
+make first-run     # idempotent, non-destructive; safe to re-run
+```
+
+It generates the app + RS256 signing keys, brings up the database first (running
+the replication setup before the read-replica joins), then builds and starts the
+rest, migrates every service, and seeds an admin (`admin@ticketarget.local` by
+default — override with `ADMIN_EMAIL`/`ADMIN_PASSWORD`; a password is generated
+and printed when the account is created). `make destroy && make first-run`
+reproduces the whole stack from scratch.
+
+Individual steps are still available if you prefer:
+
 ```bash
 cp .env.example .env
+make keys          # write app keys + AUTH_JWT_SECRET into .env (if empty)
+make jwt-keys      # generate the RS256 signing keypair
 make up            # build + start the whole stack
-make seed          # run migrations + seeders
+make seed          # run migrations (users + event + booking)
 make register-cdc  # register the Debezium Postgres connector
+make seed-admin    # create/promote an admin account
 ```
 
 Then open:

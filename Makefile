@@ -9,9 +9,11 @@ help: ## List available targets
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: init
-init: ## Copy .env and generate app keys
+init: ## Copy .env and generate app + JWT keys (idempotent)
 	@test -f .env || cp .env.example .env
 	@$(MAKE) keys
+	@$(MAKE) jwt-keys
+
 
 .PHONY: build
 build: ## Build all images
@@ -50,25 +52,44 @@ logs: ## Tail logs (use SVC=event-service to scope)
 	$(COMPOSE) logs -f $(SVC)
 
 .PHONY: keys
-keys: ## Generate Laravel app keys for each service
-	@$(COMPOSE) run --rm event-service php artisan key:generate --show 2>/dev/null || true
-	@$(COMPOSE) run --rm booking-service php artisan key:generate --show 2>/dev/null || true
+keys: ## Generate Laravel APP_KEYs + AUTH_JWT_SECRET into .env (only if empty/placeholder)
+	@set -e; \
+	for var in EVENT_APP_KEY BOOKING_APP_KEY USERS_APP_KEY; do \
+		cur=$$(grep -E "^$$var=" .env | cut -d= -f2-); \
+		if [ -z "$$cur" ]; then \
+			key="base64:$$(openssl rand -base64 32)"; \
+			if grep -qE "^$$var=" .env; then sed -i.bak "s|^$$var=.*|$$var=$$key|" .env; else echo "$$var=$$key" >> .env; fi; \
+			echo "  set $$var"; \
+		else echo "  $$var already set"; fi; \
+	done; \
+	sec=$$(grep -E "^AUTH_JWT_SECRET=" .env | cut -d= -f2-); \
+	if [ -z "$$sec" ] || [ "$$sec" = "change-me-long-random-shared-secret" ]; then \
+		newsec=$$(openssl rand -hex 48); sed -i.bak "s|^AUTH_JWT_SECRET=.*|AUTH_JWT_SECRET=$$newsec|" .env; echo "  set AUTH_JWT_SECRET"; \
+	else echo "  AUTH_JWT_SECRET already set"; fi; \
+	rm -f .env.bak
+
 
 # Schema/admin commands target the primary for reads too — migrations are writes
 # and must not depend on the (possibly lagging or still-bootstrapping) replica.
 .PHONY: seed
-seed: ## Run migrations and seeders
-	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary event-service php artisan migrate --seed
-	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary booking-service php artisan migrate
+seed: ## Run all migrations (serial, shared ledger) + event seeders
+	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary -T users-service php artisan migrate --force
+	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary -T event-service php artisan migrate --seed --force
+	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary -T booking-service php artisan migrate --force
+
 
 .PHONY: jwt-keys
 jwt-keys: ## Generate the RS256 signing keypair the Users service uses to issue JWTs
 	@mkdir -p infra/keys
+	@if [ -d infra/keys/jwt-private.pem ]; then \
+		echo "ERROR: infra/keys/jwt-private.pem is a DIRECTORY (the stack was started before the key existed)."; \
+		echo "Fix: make down; rm -rf infra/keys/jwt-private.pem; make jwt-keys"; exit 1; fi
 	@test -f infra/keys/jwt-private.pem \
 		&& echo "infra/keys/jwt-private.pem already exists — refusing to overwrite" \
 		|| (openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out infra/keys/jwt-private.pem \
 			&& chmod 600 infra/keys/jwt-private.pem \
 			&& echo "Wrote infra/keys/jwt-private.pem (kid: set AUTH_JWT_ACTIVE_KID, default k1)")
+
 
 .PHONY: admin-token
 admin-token: ## Mint an admin JWT for an existing admin: make admin-token EMAIL=user@example.com
@@ -87,11 +108,15 @@ fix-replication: ## Ensure the replicator role + pg_hba rules exist on the runni
 	$(COMPOSE) exec -T postgres-primary bash /docker-entrypoint-initdb.d/10-replication.sh
 
 .PHONY: register-cdc
-register-cdc: ## Register the Debezium Postgres connector
-	@curl -sS -X POST -H "Content-Type: application/json" \
-		--data @infra/debezium/register-postgres-connector.json \
-		$${DEBEZIUM_CONNECT_URL:-http://localhost:8083}/connectors | jq . || \
-		echo "Connect not ready yet — retry once the stack is up."
+register-cdc: ## Register the Debezium Postgres connector (retries until Connect is ready)
+	@url="$${DEBEZIUM_CONNECT_URL:-http://localhost:8083}"; \
+	for i in $$(seq 1 20); do \
+		code=$$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" --data @infra/debezium/register-postgres-connector.json $$url/connectors); \
+		if [ "$$code" = "201" ] || [ "$$code" = "409" ]; then echo "CDC connector registered (http $$code)"; exit 0; fi; \
+		echo "  Connect not ready (attempt $$i, http $$code); retrying in 5s..."; sleep 5; \
+	done; \
+	echo "WARNING: CDC connector not registered after retries — search sync may be incomplete. Re-run 'make register-cdc' once debezium-connect is up."
+
 
 .PHONY: es-bootstrap
 es-bootstrap: ## Create the Elasticsearch events + app-logs indices
@@ -133,3 +158,65 @@ test: ## Run test suites
 .PHONY: test-concurrency
 test-concurrency: ## Opt-in: parallel same-seat reserve race against the RUNNING stack (holds one seat ~10min)
 	bash scripts/concurrency-smoke.sh
+
+.PHONY: first-run
+first-run: ## First-time bring-up on a new machine (idempotent, non-destructive)
+	@test -f .env || cp .env.example .env
+	@$(MAKE) keys
+	@$(MAKE) jwt-keys
+	@# Fresh volumes: start the primary alone, then apply the (idempotent) replication
+	@# setup on the live server BEFORE the read-replica joins — otherwise the replica
+	@# crash-loops on pg_basebackup (no pg_hba entry) and compose aborts the bring-up.
+	$(COMPOSE) up -d --build postgres-primary
+	@$(MAKE) wait-db
+	@$(MAKE) fix-replication
+	$(COMPOSE) up -d --build
+	@$(MAKE) wait-healthy
+	@$(MAKE) seed
+	@$(MAKE) es-bootstrap
+	@$(MAKE) register-cdc
+	@$(MAKE) seed-admin
+	@$(MAKE) smoke
+	@echo ""
+	@echo "Stack is up. SPA: http://app.ticketarget.localhost  API: http://api.ticketarget.localhost"
+	@echo "Mint an admin JWT any time with: make admin-token EMAIL=$(ADMIN_EMAIL)"
+
+.PHONY: bootstrap
+bootstrap: first-run ## Alias for first-run
+
+.PHONY: wait-db
+wait-db: ## Block until postgres-primary is healthy (bounded)
+	@echo "Waiting for postgres-primary..."
+	@elapsed=0; limit=120; \
+	until $(COMPOSE) ps postgres-primary --format '{{.Status}}' | grep -q healthy; do \
+		if [ $$elapsed -ge $$limit ]; then echo "postgres-primary not healthy after $${limit}s"; $(COMPOSE) ps postgres-primary; exit 1; fi; \
+		sleep 3; elapsed=$$((elapsed+3)); \
+	done; \
+	echo "  postgres-primary healthy"
+
+.PHONY: wait-healthy
+wait-healthy: ## Block until the core services report healthy (bounded)
+	@echo "Waiting for core services to become healthy..."
+	@elapsed=0; limit=240; \
+	until [ "$$($(COMPOSE) ps --format '{{.Name}} {{.Status}}' | grep -cE '(postgres-primary|postgres-replica|kafka|elasticsearch|event-service|booking-service|users-service|search-service).*healthy')" -ge 8 ]; do \
+		if [ $$elapsed -ge $$limit ]; then echo "Timed out after $${limit}s waiting for health:"; $(COMPOSE) ps; exit 1; fi; \
+		sleep 3; elapsed=$$((elapsed+3)); \
+	done; \
+	echo "  core services healthy (postgres primary+replica, kafka, elasticsearch, event, booking, users, search)"
+
+ADMIN_EMAIL ?= admin@ticketarget.local
+
+.PHONY: seed-admin
+seed-admin: ## Seed an admin account (ADMIN_EMAIL/ADMIN_PASSWORD override; generates a password if unset)
+	@pw="$${ADMIN_PASSWORD:-$$(openssl rand -base64 12)}"; \
+	$(COMPOSE) exec -e DB_READ_HOST=postgres-primary -T users-service php artisan admin:create $(ADMIN_EMAIL) --password="$$pw" --name="Admin"; \
+	echo "  Admin email: $(ADMIN_EMAIL)"; \
+	echo "  If the account was just created, its password is: $$pw"; \
+	echo "  (an already-existing account keeps its current password — set ADMIN_PASSWORD to force one on creation)"
+
+.PHONY: smoke
+smoke: ## Quick gateway smoke checks (informational)
+	@echo "Smoke checks (http entrypoint):"
+	@curl -s -o /dev/null -w '  gateway /events        -> HTTP %{http_code}\n' http://api.ticketarget.localhost/events || true
+	@curl -s -o /dev/null -w '  gateway JWKS           -> HTTP %{http_code}\n' http://api.ticketarget.localhost/auth/.well-known/jwks.json || true
+	@curl -s -o /dev/null -w '  SPA (app host)         -> HTTP %{http_code}\n' http://app.ticketarget.localhost/ || true
