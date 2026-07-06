@@ -175,6 +175,7 @@ first-run: ## First-time bring-up on a new machine (idempotent, non-destructive)
 	$(COMPOSE) up -d --build
 	@$(MAKE) wait-healthy
 	@$(MAKE) seed
+	@$(MAKE) seed-catalog
 	@$(MAKE) es-bootstrap
 	@$(MAKE) register-cdc
 	@$(MAKE) seed-admin
@@ -207,6 +208,21 @@ wait-healthy: ## Block until the core services report healthy (bounded)
 	echo "  core services healthy (postgres primary+replica, kafka, elasticsearch, event, booking, users, search)"
 
 ADMIN_EMAIL ?= admin@ticketarget.local
+
+.PHONY: seed-catalog
+seed-catalog: ## Populate booking read models from seeded catalog data (idempotent)
+	@echo "Populating booking read models (seat_inventory, capacity ledger, event directory)..."
+	@cut=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	$(COMPOSE) exec -T -e DB_READ_HOST=postgres-primary booking-service php artisan booking:seed-inventory; \
+	$(COMPOSE) exec -T -e DB_READ_HOST=postgres-primary event-service php artisan catalog:backfill-ticket-events --cutoff=$$cut; \
+	$(COMPOSE) exec -T -e DB_READ_HOST=postgres-primary event-service php artisan catalog:backfill-event-directory; \
+	$(COMPOSE) exec -T event-service php artisan outbox:publish; \
+	$(COMPOSE) exec -T -e DB_READ_HOST=postgres-primary booking-service php artisan catalog:consume
+	@inv=$$($(COMPOSE) exec -T postgres-primary psql -U $${POSTGRES_USER:-ticketarget} -d $${POSTGRES_DB:-ticketarget} -tAc "SELECT count(*) FROM seat_inventory"); \
+	tk=$$($(COMPOSE) exec -T postgres-primary psql -U $${POSTGRES_USER:-ticketarget} -d $${POSTGRES_DB:-ticketarget} -tAc "SELECT count(*) FROM tickets"); \
+	led=$$($(COMPOSE) exec -T postgres-primary psql -U $${POSTGRES_USER:-ticketarget} -d $${POSTGRES_DB:-ticketarget} -tAc "SELECT count(*) FROM catalog_capacity_ledger"); \
+	echo "  seat_inventory=$$inv tickets=$$tk capacity_ledger=$$led"; \
+	if [ "$$inv" != "$$tk" ]; then echo "  WARNING: seat_inventory ($$inv) != tickets ($$tk) — read model may be incomplete"; fi
 
 .PHONY: seed-admin
 seed-admin: ## Seed an admin account (ADMIN_EMAIL/ADMIN_PASSWORD override; generates a password if unset)

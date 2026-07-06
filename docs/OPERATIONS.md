@@ -98,6 +98,24 @@ guarded (`pending → captured → partially_refunded/refunded | failed`);
 `bookings.charge_id`/`payment_id` are display projections — never treat them
 as money truth.
 
+**Read-model bootstrap (2026-07-06).** The event-service `DatabaseSeeder` creates
+demo events/tickets with `Ticket::factory()->create()` — a direct insert that
+does NOT go through the outbox, so seeded catalog data emits no `ticket.generated`
+events and booking's read models (`seat_inventory`, `catalog_capacity_ledger`,
+`catalog_event_directory`) start EMPTY. `make first-run` now runs `make
+seed-catalog` after `make seed` to converge them from the seeded tables via the
+documented idempotent backfills: `booking:seed-inventory`,
+`catalog:backfill-ticket-events --cutoff=<now>`, `catalog:backfill-event-directory`,
+then `outbox:publish` + `catalog:consume` inline (deterministic, not waiting on the
+scheduler). Run `make seed-catalog` manually to recover the read models on any
+environment. GATE NOTE: the `CATALOG_STATUS_DUAL_WRITE` flag-off is only
+evaluable AFTER this — with an empty `seat_inventory` the drift check reports 0/0
+(meaningless) and flipping the flag would make an empty authority the sole source
+of truth, zeroing all availability/capacity. The flag-off still needs a real
+multi-day zero-drift window observed on POPULATED data (verify-inventory checking
+~N rows, not 0), and remains irreversible without a `seat_inventory -> tickets`
+backfill.
+
 **Capacity read model (2026-07-05).** Booking's admin dashboard reads event
 capacity from `catalog_capacity_ledger`, fed by `ticket.generated` events on
 Kafka topic `catalog.events` — no catalog tables are read. `catalog:consume`
