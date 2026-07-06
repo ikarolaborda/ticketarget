@@ -141,11 +141,38 @@ degrades to the catalog snapshot if the call fails. Seeding/recovery:
 `booking:seed-inventory` (fill-missing-only, rerunnable; new tickets flow in
 via `ticket.generated` `tickets[]`). Drift gate: `booking:verify-inventory
 --strict` compares the mirror against the inventory — drift means the mirror
-is broken, fix before trusting rollback. ROLLBACK CRITERIA: while the flag is
-on, rolling back means pointing reads at `tickets.status` again (mirror is
-current); after the flag is off this is IRREVERSIBLE without backfilling
-`tickets` from `seat_inventory` first. Disable the flag only after a sustained
-zero-drift window and update this note when it happens.
+is broken, fix before trusting rollback.
+
+**Dual-write flag-off — DONE (2026-07-06).** `CATALOG_STATUS_DUAL_WRITE=false`
+is set (`.env` + the booking-service and booking-scheduler compose blocks; both
+run `SeatInventoryProjector`). The status mirror to `tickets.status` is now a
+no-op; `seat_inventory` is the sole inventory authority. Precondition that was
+met first: `seat_inventory` populated (run `make seed-catalog`) and
+`verify-inventory --strict` clean on real rows (1200 checked / 0 mismatches),
+not 0/0. Verified live: with the flag off, a `SeatInventoryProjector::transition`
+moved `seat_inventory` to `booked` while `tickets.status` stayed frozen, and
+`GET /booking/availability/{event}` + the admin capacity ledger still serve
+correctly. `tickets.status` (and the catalog's `TicketResource.status` display
+field) is now FROZEN — its removal is deferred cleanup, tracked with the CDC
+decommission.
+
+*verify-inventory is RETIRED as a gate post-flag-off.* With the mirror frozen,
+every future transition makes `tickets.status` "drift" from `seat_inventory` BY
+DESIGN, so a non-zero `booking:verify-inventory` result after the cutover is
+EXPECTED, not a regression. The pre-cutover clean run is the evidence of record.
+
+*Emergency rollback (demo-only, irreversible-by-design).* Re-enabling the mirror
+does NOT recover the drift accumulated while off. To roll back, first backfill
+`tickets.status` from the authority, then flip the flag on and recreate:
+`UPDATE tickets t SET status = si.status FROM seat_inventory si WHERE si.ticket_id = t.id;`
+(run via `docker compose exec postgres-primary psql`), then
+`CATALOG_STATUS_DUAL_WRITE=true` + `make recreate`. This is an emergency path,
+not routine ops.
+
+ROLLBACK CRITERIA (historical): while the flag was
+on, rolling back meant pointing reads at `tickets.status` again (mirror was
+current); after the flag is off this is IRREVERSIBLE without the
+`tickets`-from-`seat_inventory` backfill above.
 
 **Rollback-window drift cadence (2026-07-05).** `booking:verify-inventory`
 runs every 15 minutes on `booking-scheduler` (non-strict: a mismatch alerts,
