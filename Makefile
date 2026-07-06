@@ -52,7 +52,7 @@ logs: ## Tail logs (use SVC=event-service to scope)
 	$(COMPOSE) logs -f $(SVC)
 
 .PHONY: keys
-keys: ## Generate Laravel APP_KEYs + AUTH_JWT_SECRET into .env (only if empty/placeholder)
+keys: ## Generate Laravel APP_KEYs + TICKET_CODE_SECRET into .env (only if empty/placeholder)
 	@set -e; \
 	for var in EVENT_APP_KEY BOOKING_APP_KEY USERS_APP_KEY; do \
 		cur=$$(grep -E "^$$var=" .env | cut -d= -f2-); \
@@ -62,10 +62,12 @@ keys: ## Generate Laravel APP_KEYs + AUTH_JWT_SECRET into .env (only if empty/pl
 			echo "  set $$var"; \
 		else echo "  $$var already set"; fi; \
 	done; \
-	sec=$$(grep -E "^AUTH_JWT_SECRET=" .env | cut -d= -f2-); \
-	if [ -z "$$sec" ] || [ "$$sec" = "change-me-long-random-shared-secret" ]; then \
-		newsec=$$(openssl rand -hex 48); sed -i.bak "s|^AUTH_JWT_SECRET=.*|AUTH_JWT_SECRET=$$newsec|" .env; echo "  set AUTH_JWT_SECRET"; \
-	else echo "  AUTH_JWT_SECRET already set"; fi; \
+	tc=$$(grep -E "^TICKET_CODE_SECRET=" .env | cut -d= -f2-); \
+	if [ -z "$$tc" ] || [ "$$tc" = "change-me-ticket-code-secret" ]; then \
+		newtc=$$(openssl rand -hex 48); \
+		if grep -qE "^TICKET_CODE_SECRET=" .env; then sed -i.bak "s|^TICKET_CODE_SECRET=.*|TICKET_CODE_SECRET=$$newtc|" .env; else echo "TICKET_CODE_SECRET=$$newtc" >> .env; fi; \
+		echo "  set TICKET_CODE_SECRET"; \
+	else echo "  TICKET_CODE_SECRET already set"; fi; \
 	rm -f .env.bak
 
 

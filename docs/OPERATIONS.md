@@ -217,18 +217,21 @@ tables — the old Sanctum `admin:token` path is gone; mint an admin JWT with
 `make admin-token EMAIL=<existing admin>` (`users-service artisan
 auth:issue-token`, admin-only).
 
-*Migration window.* `AUTH_JWT_ACCEPT_HS256` (default `true`) lets verifiers
-still accept legacy HS256 bearers signed with the shared `AUTH_JWT_SECRET`
-during the overlap. Frontend tokens live in `localStorage` with a 24h TTL and
-no refresh, so all in-flight HS256 tokens expire within 24h of RS256 issuance
-starting. CUTOFF SEQUENCE (after >= 24h of RS256 issuance): set
-`AUTH_JWT_ACCEPT_HS256=false` on booking- and event-service, then remove
-`AUTH_JWT_SECRET` from both so a leaked shared secret cannot forge tokens even
-if the flag regresses. Leave `AUTH_JWT_SECRET` on users-service only if it is
-still used elsewhere (it is not, once the flag is off). Verified live
-(2026-07-05): with the flag off, a forged HS256 admin token is rejected 401 on
-both services while an RS256 admin JWT still succeeds (201/200) — the
-shared-secret forgery path is closed.
+*HS256 flag-off — DONE (2026-07-06).* The migration window (`AUTH_JWT_ACCEPT_HS256`)
+has been closed. `AUTH_JWT_ACCEPT_HS256=false` for all three services and
+`AUTH_JWT_SECRET` is REMOVED from every service's environment, so a leaked shared
+secret cannot forge tokens even if the flag regressed. One subtlety handled:
+booking-service's `AUTH_JWT_SECRET` also fed the QR ticket-code HMAC
+(`TicketCodeIssuer`), so that was decoupled first into its own `TICKET_CODE_SECRET`
+(config `ticket_code.secret`; `make keys` now generates it) — set to the old
+secret's value so previously-issued codes still verify. Verified live (2026-07-06):
+a forged HS256 admin token signed with the old shared secret is rejected 401 on
+booking, event, AND users `/auth/me`, while RS256 admin JWTs still succeed
+(200/201) and ticket-code issue/verify round-trips cleanly. To re-open a window
+(e.g. a future key migration that needs HS256), set `AUTH_JWT_ACCEPT_HS256=true`
+and restore a shared `AUTH_JWT_SECRET` — but that is a regression, not the norm.
+Note: recreating the auth services detaches Traefik from the edge network
+(gateway returns 000/404); `make reload-gateway` (recreate Traefik) restores it.
 
 *Key rotation.* Introduce a new private key under a new `AUTH_JWT_ACTIVE_KID`;
 publish BOTH public keys in the JWKS (set `AUTH_JWT_PREVIOUS_PUBLIC_KEY_PATH` +

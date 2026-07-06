@@ -81,10 +81,12 @@ Status: in progress (2026-07-05). Companion to `ARCHITECTURE.md`.
   publishes the public key at `GET /auth/.well-known/jwks.json`. booking- and
   event-service became verify-only: they fetch the JWKS (cached, stale-on-error,
   one refetch on kid miss), select the key by `kid`, and verify with
-  `openssl_verify`; the shared symmetric `AUTH_JWT_SECRET` is now a legacy path
-  accepted only while `AUTH_JWT_ACCEPT_HS256=true` (24h migration overlap — see
-  OPERATIONS.md for the cutoff + rotation runbook). This closes the forgery hole
-  where any of three services holding the shared secret could mint admin tokens.
+  `openssl_verify`. The HS256 migration window is now CLOSED (2026-07-06):
+  `AUTH_JWT_ACCEPT_HS256=false` everywhere and `AUTH_JWT_SECRET` removed from all
+  services (booking's QR ticket-code HMAC was decoupled into `TICKET_CODE_SECRET`
+  first) — a forged HS256 token signed with the old shared secret is now rejected
+  on all services (verified live). This closes the forgery hole where any of the
+  three services holding the shared secret could mint admin tokens.
   event-service's Sanctum `admin:token` path is REMOVED (Sanctum dependency,
   `User` model, `config/auth.php`, guard config all gone) — its last read of the
   `users`/`personal_access_tokens` tables is eliminated, unblocking that service

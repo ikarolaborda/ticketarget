@@ -279,7 +279,6 @@ services:
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
       AUTH_JWKS_URL: ${AUTH_JWKS_URL:-http://users-service:8000/auth/.well-known/jwks.json}
       AUTH_JWT_ACCEPT_HS256: ${AUTH_JWT_ACCEPT_HS256:-true}
     labels:
@@ -317,7 +316,7 @@ services:
       REDIS_LOCK_DB: ${REDIS_LOCK_DB:-1}
       STRIPE_SECRET: ${STRIPE_SECRET}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+      TICKET_CODE_SECRET: ${TICKET_CODE_SECRET}
       AUTH_JWKS_URL: ${AUTH_JWKS_URL:-http://users-service:8000/auth/.well-known/jwks.json}
       AUTH_JWT_ACCEPT_HS256: ${AUTH_JWT_ACCEPT_HS256:-true}
       MAIL_MAILER: smtp
@@ -416,7 +415,6 @@ services:
       DB_DATABASE: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
       AUTH_JWT_ACTIVE_KID: ${AUTH_JWT_ACTIVE_KID:-k1}
       AUTH_JWT_PRIVATE_KEY_PATH: /etc/ticketarget/jwt/private.pem
       AUTH_JWT_ACCEPT_HS256: ${AUTH_JWT_ACCEPT_HS256:-true}
